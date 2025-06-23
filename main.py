@@ -183,7 +183,7 @@ def get_qdrant_store():
         return Qdrant(
             client=client,
             collection_name="hr-policies",
-            embeddings=embedding
+            embeddings=embeddings
         )
     except Exception as e:
         st.error(f"Error connecting to vector database: {str(e)}")
