@@ -14,15 +14,34 @@ from qdrant_client.models import VectorParams, Distance, PointStruct
 def load_exported_db():
     """Load exported database from pickle file."""
     try:
-        # Check if export file exists
-        if not os.path.exists("qdrant_export.pkl"):
-            print("Error: qdrant_export.pkl not found")
+        # Try different possible locations for the export file
+        possible_paths = [
+            "qdrant_export.pkl",  # Current directory
+            os.path.join(os.path.dirname(os.path.abspath(__file__)), "qdrant_export.pkl"),  # Script directory
+            "/app/qdrant_export.pkl",  # Streamlit Cloud app directory
+            "/mount/src/tesla-hr-policy-assistant/qdrant_export.pkl"  # Another possible Streamlit Cloud path
+        ]
+        
+        # Find the first path that exists
+        export_path = None
+        for path in possible_paths:
+            if os.path.exists(path):
+                export_path = path
+                print(f"Found export file at: {path}")
+                break
+        
+        if export_path is None:
+            print("Error: qdrant_export.pkl not found in any of the expected locations")
+            print(f"Searched in: {possible_paths}")
+            # List files in current directory for debugging
+            print("Files in current directory:")
+            print(os.listdir(os.path.dirname(os.path.abspath(__file__))))
             return False
         
         print("Loading exported database...")
         
         # Load export data
-        with open("qdrant_export.pkl", "rb") as f:
+        with open(export_path, "rb") as f:
             export_data = pickle.load(f)
         
         vectors = export_data["vectors"]
