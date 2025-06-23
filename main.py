@@ -158,25 +158,28 @@ def get_qdrant_store():
         is_cloud = os.environ.get('IS_STREAMLIT_CLOUD') == 'true'
         
         if is_cloud:
-            # For cloud deployment, use in-memory Qdrant
-            client = QdrantClient(":memory:")
-            
-            # Create the collection if it doesn't exist
-            from qdrant_client.models import VectorParams, Distance
+            # For cloud deployment, try to load from exported database
             try:
-                collection = client.get_collection(collection_name="hr-policies")
+                # Import the cloud database loader
+                from cloud_db import load_exported_db
+                
+                # Try to load the exported database
+                client = load_exported_db()
+                
+                # If loading failed, show warning and return None
+                if not client:
+                    st.warning("⚠️ Could not load vector database. Please make sure qdrant_export.pkl is uploaded.")
+                    return None
+                
                 # Check if collection has any points
                 collection_info = client.get_collection(collection_name="hr-policies")
                 if collection_info.vectors_count == 0:
                     st.warning("⚠️ Vector database is empty. No documents have been ingested.")
                     return None
-            except Exception:
-                # Collection doesn't exist, create it but warn that it's empty
-                client.create_collection(
-                    collection_name="hr-policies",
-                    vectors_config=VectorParams(size=1536, distance=Distance.COSINE)
-                )
-                st.warning("⚠️ Vector database is empty. No documents have been ingested.")
+                    
+                st.success(f"✅ Successfully loaded {collection_info.vectors_count} vectors from exported database.")
+            except Exception as e:
+                st.error(f"Error loading exported database: {str(e)}")
                 return None
         else:
             # For local development, use local file-based storage
