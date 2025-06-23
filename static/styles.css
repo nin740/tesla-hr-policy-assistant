@@ -1,0 +1,52 @@
+/* Tesla HR Chatbot Styling */
+
+/* Main elements - dark theme */
+.stApp {background-color: #121212;}
+.main {background-color: #121212;}
+h1, h2, h3 {color: #f5f5f5; font-family: 'Gotham SSm', 'Helvetica Neue', Helvetica, Arial, sans-serif; font-weight: 400; letter-spacing: 0.5px;}
+p, li, div, span, label {color: #f5f5f5 !important; font-family: 'Gotham SSm', 'Helvetica Neue', Helvetica, Arial, sans-serif;}
+
+/* Buttons - clean, minimal design */
+.stButton>button {background-color: #e82127; color: white; border: none; border-radius: 2px; font-size: 14px; letter-spacing: 0.5px; padding: 4px 15px; transition: all 0.3s;}
+.stButton>button:hover {background-color: #c41c21; color: white;}
+.stButton>button:active {background-color: #a01419; color: white;}
+
+/* Chat elements - sleek, professional */
+.stChatMessage {border-radius: 2px; border: none; margin-bottom: 12px;}
+.stChatMessage [data-testid="chatAvatarIcon-user"] {background-color: #000000;}
+.stChatMessage [data-testid="chatAvatarIcon-assistant"] {background-color: #e82127;}
+
+/* Chat messages - subtle styling with darker background */
+.stChatMessage {background-color: transparent !important; margin-bottom: 10px !important;}
+.stChatMessage [data-testid="stChatMessageContent"] {background-color: #1a1a1a !important; border-radius: 2px !important;}
+.stChatMessage [data-testid="stChatMessageContent"] p {color: #f5f5f5 !important;}
+
+/* Input field - sleek design */
+.stTextInput>div>div>input {background-color: #333333; color: #f5f5f5; border: 1px solid #444; border-radius: 2px;}
+
+/* Sidebar - dark with red accents */
+[data-testid=stSidebar] {background-color: #000000; padding-top: 1rem;}
+[data-testid=stSidebar] h1, [data-testid=stSidebar] h2, [data-testid=stSidebar] h3, [data-testid=stSidebar] h4, [data-testid=stSidebar] label {color: white !important; letter-spacing: 0.5px;}
+[data-testid=stSidebar] p {color: white !important;}
+[data-testid=stSidebar] .stButton>button {background-color: #e82127; color: white; width: 100%; margin-bottom: 5px;}
+[data-testid=stSidebar] .stButton>button:hover {background-color: #c41c21;}
+
+/* Checkbox */
+.stCheckbox label {color: white !important;}
+.stCheckbox label span p {color: white !important;}
+
+/* Expanders - subtle, professional */
+.streamlit-expanderHeader {color: #f5f5f5; font-weight: 400; letter-spacing: 0.5px;}
+div[data-testid="stExpander"] {border: 1px solid #333333; border-radius: 2px; background-color: #333333;}
+
+/* Dividers */
+hr {border-color: #333333;}
+
+/* Info messages */
+.stAlert {background-color: #333333; color: #f5f5f5; border: none; border-left: 2px solid #e82127;}
+.stAlert p {color: #f5f5f5 !important;}
+
+/* Remove Streamlit branding */
+#MainMenu {visibility: hidden;}
+footer {visibility: hidden;}
+.viewerBadge {display: none;}
