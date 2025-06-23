@@ -142,7 +142,7 @@ def get_embeddings():
         st.error(f"Error initializing embeddings: {str(e)}")
         return None
 
-# Function to initialize Qdrant client with local connection
+# Function to initialize Qdrant client with local or cloud connection
 def get_qdrant_store():
     from qdrant_client import QdrantClient
     import os
@@ -158,83 +158,28 @@ def get_qdrant_store():
         is_cloud = os.environ.get('IS_STREAMLIT_CLOUD') == 'true'
         
         if is_cloud:
-            # For cloud deployment, try to load from exported database
+            # For cloud deployment, use Qdrant cloud service
+            qdrant_url = os.environ.get('QDRANT_URL')
+            qdrant_api_key = os.environ.get('QDRANT_API_KEY')
+            
+            if not qdrant_url or not qdrant_api_key:
+                st.error("❌ Missing QDRANT_URL or QDRANT_API_KEY environment variables.")
+                return None
+                
             try:
-                # Import the cloud database loader
-                from cloud_db import load_exported_db
+                # Connect to Qdrant cloud
+                client = QdrantClient(url=qdrant_url, api_key=qdrant_api_key)
                 
-                # Try to load the exported database
-                client = load_exported_db()
-                
-                # If loading failed, try to ingest the PDF directly
-                if not client:
-                    st.info("Attempting to ingest PDF directly in cloud environment...")
-                    try:
-                        # Create in-memory Qdrant client
-                        client = QdrantClient(":memory:")
-                        
-                        # Create the collection
-                        from qdrant_client.models import VectorParams, Distance
-                        client.create_collection(
-                            collection_name="hr-policies",
-                            vectors_config=VectorParams(size=1536, distance=Distance.COSINE)
-                        )
-                        
-                        # Check if PDF exists
-                        pdf_paths = [
-                            "data/Tesla_Employee_Handbook.pdf",
-                            os.path.join(os.path.dirname(os.path.abspath(__file__)), "data/Tesla_Employee_Handbook.pdf"),
-                            "/app/data/Tesla_Employee_Handbook.pdf",
-                            "/mount/src/tesla-hr-policy-assistant/data/Tesla_Employee_Handbook.pdf"
-                        ]
-                        
-                        pdf_path = None
-                        for path in pdf_paths:
-                            if os.path.exists(path):
-                                pdf_path = path
-                                break
-                        
-                        if pdf_path is None:
-                            st.warning("⚠️ Could not find Tesla_Employee_Handbook.pdf in any expected location.")
-                            return None
-                        
-                        # Ingest PDF
-                        st.info(f"Found PDF at {pdf_path}. Ingesting...")
-                        
-                        # Import required modules
-                        from langchain.text_splitter import RecursiveCharacterTextSplitter
-                        from langchain_community.document_loaders import PyPDFLoader
-                        
-                        # Load and split the document
-                        loader = PyPDFLoader(pdf_path)
-                        documents = loader.load()
-                        text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
-                        texts = text_splitter.split_documents(documents)
-                        
-                        # Create embeddings and add to Qdrant
-                        Qdrant.from_documents(
-                            documents=texts,
-                            embedding=embedding,
-                            url=None,
-                            collection_name="hr-policies",
-                            client=client
-                        )
-                        
-                        st.success("✅ Successfully ingested PDF and created vector database in memory.")
-                    except Exception as e:
-                        st.error(f"Error ingesting PDF: {str(e)}")
-                        return None
-                
-                # Check if collection has any points
-                collection_info = client.get_collection(collection_name="hr-policies")
-                if collection_info.vectors_count == 0 and collection_info.points_count == 0:
-                    st.warning("⚠️ Vector database is empty. No documents have been ingested.")
+                # Check if collection exists
+                try:
+                    collection_info = client.get_collection(collection_name="hr-policies")
+                    st.success(f"✅ Connected to Qdrant cloud collection 'hr-policies'.")
+                except Exception:
+                    st.error("❌ Collection 'hr-policies' not found in Qdrant cloud.")
+                    st.info("Please run the ingest.py script with cloud configuration to create the collection.")
                     return None
-                    
-                vector_count = collection_info.vectors_count or collection_info.points_count
-                st.success(f"✅ Successfully loaded {vector_count} vectors.")
             except Exception as e:
-                st.error(f"Error loading vector database: {str(e)}")
+                st.error(f"❌ Error connecting to Qdrant cloud: {str(e)}")
                 return None
         else:
             # For local development, use local file-based storage

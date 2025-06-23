@@ -9,4 +9,3 @@ qdrant-client>=1.6.0
 uuid>=1.30
 airtable-python-wrapper>=0.15.3
 PyPDF2>=3.0.0
-pypdf>=1.13
