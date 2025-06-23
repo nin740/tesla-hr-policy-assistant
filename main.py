@@ -11,6 +11,7 @@ import requests
 from dotenv import load_dotenv
 import streamlit as st
 from langchain_community.vectorstores import Qdrant
+from qdrant_client import QdrantClient
 from langchain_openai import AzureOpenAIEmbeddings, AzureChatOpenAI
 from langchain.chains import RetrievalQA
 from langchain.chains.question_answering import load_qa_chain
@@ -153,18 +154,21 @@ def get_qdrant_store():
         return None
         
     try:
-        # Check if we're running on Streamlit Cloud
-        is_cloud = os.environ.get("IS_STREAMLIT_CLOUD", "").lower() == "true"
+        # Always try local database first for simplicity
+        if os.path.exists("./local_qdrant_db"):
+            try:
+                # For local development, use local file-based storage
+                client = QdrantClient(path="./local_qdrant_db")
+                return Qdrant(client=client, collection_name="hr-policies", embeddings=embeddings)
+            except Exception as e:
+                st.warning(f"⚠️ Error connecting to local database: {str(e)}. Trying cloud connection...")
+                # Fall through to cloud connection
         
-        if is_cloud:
-            # Use Qdrant cloud in production
-            qdrant_url = "https://621ceab0-5d43-41d5-9c0d-01982f8844cc.us-east-1-0.aws.cloud.qdrant.io"
-            qdrant_api_key = os.getenv("QDRANT_API_KEY")
-            
-            if not qdrant_api_key:
-                st.error("Missing QDRANT_API_KEY environment variable.")
-                return None
-                
+        # Check if we have cloud credentials
+        qdrant_url = os.getenv("QDRANT_URL")
+        qdrant_api_key = os.getenv("QDRANT_API_KEY")
+        
+        if qdrant_url and qdrant_api_key:
             try:
                 # Connect to Qdrant cloud
                 client = QdrantClient(url=qdrant_url, api_key=qdrant_api_key)
@@ -173,18 +177,10 @@ def get_qdrant_store():
                 st.error(f"❌ Error connecting to Qdrant cloud: {str(e)}")
                 return None
         else:
-            # For local development, use local file-based storage
-            if not os.path.exists("./local_qdrant_db"):
-                st.warning("⚠️ Local vector database not found. Please run ingest.py first.")
-                return None
-                
-            client = QdrantClient(path="./local_qdrant_db")
+            st.warning("⚠️ Local vector database not found and no cloud credentials available. Please run ingest.py first.")
+            return None
         
-        return Qdrant(
-            client=client,
-            collection_name="hr-policies",
-            embeddings=embeddings
-        )
+        # Return statement moved to each specific case above
     except Exception as e:
         st.error(f"Error connecting to vector database: {str(e)}")
         # Return a dummy store that won't crash the app but won't return results
