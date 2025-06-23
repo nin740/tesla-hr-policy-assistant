@@ -29,10 +29,10 @@ def main():
     # Initialize Azure OpenAI embeddings
     try:
         embeddings = AzureOpenAIEmbeddings(
-            deployment=os.getenv("AZURE_OPENAI_EMBEDDING_DEPLOYMENT"),
-            api_key=os.getenv("AZURE_OPENAI_API_KEY"),
-            azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
-            api_version=os.getenv("AZURE_OPENAI_API_VERSION")
+            deployment=os.getenv("AZURE_EMBEDDING_DEPLOYMENT"),
+            api_key=os.getenv("AZURE_EMBEDDING_KEY"),
+            azure_endpoint=os.getenv("AZURE_EMBEDDING_ENDPOINT"),
+            api_version=os.getenv("AZURE_EMBEDDING_API_VERSION")
         )
         print("✅ Successfully initialized Azure OpenAI embeddings.")
     except Exception as e:
@@ -57,17 +57,26 @@ def main():
     # Initialize Qdrant client
     try:
         if use_cloud:
-            # Use Qdrant cloud
-            qdrant_url = os.getenv("QDRANT_URL")
-            qdrant_api_key = os.getenv("QDRANT_API_KEY")
-            
-            if not qdrant_url or not qdrant_api_key:
-                print("❌ Missing QDRANT_URL or QDRANT_API_KEY environment variables.")
-                return
+            # Initialize Qdrant client for cloud
+            try:
+                qdrant_url = os.environ.get("QDRANT_URL")
+                qdrant_api_key = os.environ.get("QDRANT_API_KEY")
                 
-            print(f"Connecting to Qdrant cloud at {qdrant_url}...")
-            client = QdrantClient(url=qdrant_url, api_key=qdrant_api_key)
-            print("✅ Connected to Qdrant cloud.")
+                if not qdrant_url or not qdrant_api_key:
+                    print("❌ Missing Qdrant cloud credentials. Please set QDRANT_URL and QDRANT_API_KEY environment variables.")
+                    return
+                
+                # Use the correct Qdrant URL format
+                qdrant_url = "https://621ceab0-5d43-41d5-9c0d-01982f8844cc.us-east-1-0.aws.cloud.qdrant.io"
+                
+                print(f"Connecting to Qdrant cloud at {qdrant_url}...")
+                
+                # Connect using URL directly
+                client = QdrantClient(url=qdrant_url, api_key=qdrant_api_key, prefer_grpc=False, timeout=60)
+                print("✅ Connected to Qdrant cloud.")
+            except Exception as e:
+                print(f"❌ Error initializing Qdrant client: {str(e)}")
+                return
         else:
             # Use local storage
             print("Using local Qdrant database...")
@@ -80,13 +89,38 @@ def main():
     # Create a vector store from the documents
     try:
         print("Creating vector store from documents...")
-        Qdrant.from_documents(
-            documents=texts,
-            embedding=embeddings,
-            url=None,  # Use the client we already initialized
+        
+        # Create collection if it doesn't exist
+        from qdrant_client.models import VectorParams, Distance
+        
+        # Check if collection exists
+        collections = client.get_collections().collections
+        collection_names = [collection.name for collection in collections]
+        
+        # If collection doesn't exist, create it
+        if "hr-policies" not in collection_names:
+            print("Creating new collection 'hr-policies'...")
+            client.create_collection(
+                collection_name="hr-policies",
+                vectors_config=VectorParams(size=1536, distance=Distance.COSINE)
+            )
+        else:
+            print("Collection 'hr-policies' already exists, recreating it...")
+            client.delete_collection(collection_name="hr-policies")
+            client.create_collection(
+                collection_name="hr-policies",
+                vectors_config=VectorParams(size=1536, distance=Distance.COSINE)
+            )
+        
+        # Create vector store
+        vector_store = Qdrant(
+            client=client,
             collection_name="hr-policies",
-            client=client
+            embeddings=embeddings,
         )
+        
+        # Add documents to the vector store
+        vector_store.add_documents(texts)
         print("✅ Successfully created vector store.")
         
         # Verify the collection was created

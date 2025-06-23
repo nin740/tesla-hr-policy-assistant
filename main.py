@@ -122,10 +122,10 @@ def get_embeddings():
     try:
         # Check for required environment variables
         required_vars = [
-            "AZURE_OPENAI_API_KEY",
-            "AZURE_OPENAI_ENDPOINT",
-            "AZURE_OPENAI_API_VERSION",
-            "AZURE_OPENAI_EMBEDDING_DEPLOYMENT"
+            "AZURE_EMBEDDING_KEY",
+            "AZURE_EMBEDDING_ENDPOINT",
+            "AZURE_EMBEDDING_API_VERSION",
+            "AZURE_EMBEDDING_DEPLOYMENT"
         ]
         
         missing_vars = [var for var in required_vars if not os.environ.get(var)]
@@ -135,8 +135,10 @@ def get_embeddings():
             return None
             
         return AzureOpenAIEmbeddings(
-            azure_deployment=os.environ["AZURE_OPENAI_EMBEDDING_DEPLOYMENT"],
-            openai_api_version=os.environ["AZURE_OPENAI_API_VERSION"],
+            deployment=os.environ["AZURE_EMBEDDING_DEPLOYMENT"],
+            api_key=os.environ["AZURE_EMBEDDING_KEY"],
+            azure_endpoint=os.environ["AZURE_EMBEDDING_ENDPOINT"],
+            api_version=os.environ["AZURE_EMBEDDING_API_VERSION"]
         )
     except Exception as e:
         st.error(f"Error initializing embeddings: {str(e)}")
@@ -144,40 +146,29 @@ def get_embeddings():
 
 # Function to initialize Qdrant client with local or cloud connection
 def get_qdrant_store():
-    from qdrant_client import QdrantClient
-    import os
-    
-    embedding = get_embeddings()
-    
-    # If embeddings couldn't be initialized, return None
-    if embedding is None:
+    """Initialize and return Qdrant vector store."""
+    # Get embeddings first
+    embeddings = get_embeddings()
+    if embeddings is None:
         return None
-    
+        
     try:
-        # Check if we're in a cloud environment (Streamlit Cloud)
-        is_cloud = os.environ.get('IS_STREAMLIT_CLOUD') == 'true'
+        # Check if we're running on Streamlit Cloud
+        is_cloud = os.environ.get("IS_STREAMLIT_CLOUD", "").lower() == "true"
         
         if is_cloud:
-            # For cloud deployment, use Qdrant cloud service
-            qdrant_url = os.environ.get('QDRANT_URL')
-            qdrant_api_key = os.environ.get('QDRANT_API_KEY')
+            # Use Qdrant cloud in production
+            qdrant_url = "https://621ceab0-5d43-41d5-9c0d-01982f8844cc.us-east-1-0.aws.cloud.qdrant.io"
+            qdrant_api_key = os.getenv("QDRANT_API_KEY")
             
-            if not qdrant_url or not qdrant_api_key:
-                st.error("❌ Missing QDRANT_URL or QDRANT_API_KEY environment variables.")
+            if not qdrant_api_key:
+                st.error("Missing QDRANT_API_KEY environment variable.")
                 return None
                 
             try:
                 # Connect to Qdrant cloud
                 client = QdrantClient(url=qdrant_url, api_key=qdrant_api_key)
-                
-                # Check if collection exists
-                try:
-                    collection_info = client.get_collection(collection_name="hr-policies")
-                    st.success(f"✅ Connected to Qdrant cloud collection 'hr-policies'.")
-                except Exception:
-                    st.error("❌ Collection 'hr-policies' not found in Qdrant cloud.")
-                    st.info("Please run the ingest.py script with cloud configuration to create the collection.")
-                    return None
+                return Qdrant(client=client, collection_name="hr-policies", embeddings=embeddings)
             except Exception as e:
                 st.error(f"❌ Error connecting to Qdrant cloud: {str(e)}")
                 return None
@@ -204,10 +195,10 @@ def get_chat_model():
     try:
         # Check for required environment variables
         required_vars = [
-            "AZURE_OPENAI_API_KEY",
-            "AZURE_OPENAI_ENDPOINT",
-            "AZURE_OPENAI_API_VERSION",
-            "AZURE_OPENAI_CHAT_DEPLOYMENT"
+            "AZURE_CHAT_KEY",
+            "AZURE_CHAT_ENDPOINT",
+            "AZURE_CHAT_DEPLOYMENT",
+            "AZURE_API_VERSION"
         ]
         
         missing_vars = [var for var in required_vars if not os.environ.get(var)]
@@ -217,10 +208,10 @@ def get_chat_model():
             return None
             
         return AzureChatOpenAI(
-            azure_deployment=os.environ["AZURE_OPENAI_CHAT_DEPLOYMENT"],
-            api_key=os.environ["AZURE_OPENAI_API_KEY"],
-            azure_endpoint=os.environ["AZURE_OPENAI_ENDPOINT"],
-            api_version=os.environ["AZURE_OPENAI_API_VERSION"],
+            azure_deployment=os.getenv("AZURE_CHAT_DEPLOYMENT"),
+            api_key=os.getenv("AZURE_CHAT_KEY"),
+            azure_endpoint=os.getenv("AZURE_CHAT_ENDPOINT"),
+            api_version=os.getenv("AZURE_API_VERSION"),
             temperature=0.3,
             max_tokens=500
         )
