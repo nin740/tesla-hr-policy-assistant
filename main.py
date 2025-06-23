@@ -149,6 +149,10 @@ def get_qdrant_store():
     
     embedding = get_embeddings()
     
+    # If embeddings couldn't be initialized, return None
+    if embedding is None:
+        return None
+    
     try:
         # Check if we're in a cloud environment (Streamlit Cloud)
         is_cloud = os.environ.get('IS_STREAMLIT_CLOUD') == 'true'
@@ -160,17 +164,26 @@ def get_qdrant_store():
             # Create the collection if it doesn't exist
             from qdrant_client.models import VectorParams, Distance
             try:
-                client.get_collection(collection_name="hr-policies")
+                collection = client.get_collection(collection_name="hr-policies")
+                # Check if collection has any points
+                collection_info = client.get_collection(collection_name="hr-policies")
+                if collection_info.vectors_count == 0:
+                    st.warning("⚠️ Vector database is empty. No documents have been ingested.")
+                    return None
             except Exception:
-                # Collection doesn't exist, create it
+                # Collection doesn't exist, create it but warn that it's empty
                 client.create_collection(
                     collection_name="hr-policies",
                     vectors_config=VectorParams(size=1536, distance=Distance.COSINE)
                 )
-                # Note: In a real deployment, you would need to upload your vectors here
-                # This is just a placeholder to prevent errors
+                st.warning("⚠️ Vector database is empty. No documents have been ingested.")
+                return None
         else:
             # For local development, use local file-based storage
+            if not os.path.exists("./local_qdrant_db"):
+                st.warning("⚠️ Local vector database not found. Please run ingest.py first.")
+                return None
+                
             client = QdrantClient(path="./local_qdrant_db")
         
         return Qdrant(
@@ -539,8 +552,23 @@ st.sidebar.markdown("""
 
 # Add spacing after the logo
 st.sidebar.markdown("""
-<div style="margin-bottom: 50px;"></div>
+<div style="margin-bottom: 20px;"></div>
 """, unsafe_allow_html=True)
+
+# Check if we're in cloud environment and display notice
+is_cloud = os.environ.get('IS_STREAMLIT_CLOUD') == 'true'
+if is_cloud:
+    st.sidebar.warning("⚠️ **Cloud Deployment Notice**")
+    st.sidebar.info(
+        "This app is running in Streamlit Cloud without a pre-populated vector database. "
+        "The chatbot may not be able to answer questions about Tesla HR policies until the database is populated. "
+        "Please contact the administrator to complete the setup."
+    )
+    
+    # Add some spacing after the notice
+    st.sidebar.markdown("""
+    <div style="margin-bottom: 20px;"></div>
+    """, unsafe_allow_html=True)
 
 # Add chat history section to sidebar (collapsible and collapsed by default)
 with st.sidebar.expander("Chat History", expanded=False):
