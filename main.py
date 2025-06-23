@@ -117,40 +117,100 @@ def load_chat_history_from_airtable():
 # Load chat history from Airtable if available
 load_chat_history_from_airtable()
 
-# Function to initialize Azure OpenAI embedding model
+# Function to initialize Azure OpenAI embeddings
 def get_embeddings():
-    return AzureOpenAIEmbeddings(
-        deployment=os.getenv("AZURE_EMBEDDING_DEPLOYMENT"),
-        api_key=os.getenv("AZURE_EMBEDDING_KEY"),
-        azure_endpoint=os.getenv("AZURE_EMBEDDING_ENDPOINT"),
-        api_version=os.getenv("AZURE_EMBEDDING_API_VERSION")
-    )
+    try:
+        # Check for required environment variables
+        required_vars = [
+            "AZURE_OPENAI_API_KEY",
+            "AZURE_OPENAI_ENDPOINT",
+            "AZURE_OPENAI_API_VERSION",
+            "AZURE_OPENAI_EMBEDDING_DEPLOYMENT"
+        ]
+        
+        missing_vars = [var for var in required_vars if not os.environ.get(var)]
+        
+        if missing_vars:
+            st.error(f"Missing required environment variables: {', '.join(missing_vars)}")
+            return None
+            
+        return AzureOpenAIEmbeddings(
+            azure_deployment=os.environ["AZURE_OPENAI_EMBEDDING_DEPLOYMENT"],
+            openai_api_version=os.environ["AZURE_OPENAI_API_VERSION"],
+        )
+    except Exception as e:
+        st.error(f"Error initializing embeddings: {str(e)}")
+        return None
 
 # Function to initialize Qdrant client with local connection
 def get_qdrant_store():
     from qdrant_client import QdrantClient
+    import os
     
     embedding = get_embeddings()
     
-    # Initialize local Qdrant client
-    client = QdrantClient(path="./local_qdrant_db")
-    
-    return Qdrant(
-        client=client,
-        collection_name="hr-policies",
-        embeddings=embedding
-    )
+    try:
+        # Check if we're in a cloud environment (Streamlit Cloud)
+        is_cloud = os.environ.get('IS_STREAMLIT_CLOUD') == 'true'
+        
+        if is_cloud:
+            # For cloud deployment, use in-memory Qdrant
+            client = QdrantClient(":memory:")
+            
+            # Create the collection if it doesn't exist
+            from qdrant_client.models import VectorParams, Distance
+            try:
+                client.get_collection(collection_name="hr-policies")
+            except Exception:
+                # Collection doesn't exist, create it
+                client.create_collection(
+                    collection_name="hr-policies",
+                    vectors_config=VectorParams(size=1536, distance=Distance.COSINE)
+                )
+                # Note: In a real deployment, you would need to upload your vectors here
+                # This is just a placeholder to prevent errors
+        else:
+            # For local development, use local file-based storage
+            client = QdrantClient(path="./local_qdrant_db")
+        
+        return Qdrant(
+            client=client,
+            collection_name="hr-policies",
+            embeddings=embedding
+        )
+    except Exception as e:
+        st.error(f"Error connecting to vector database: {str(e)}")
+        # Return a dummy store that won't crash the app but won't return results
+        return None
 
 # Function to initialize Azure OpenAI Chat model
 def get_chat_model():
-    return AzureChatOpenAI(
-        azure_deployment=os.getenv("AZURE_CHAT_DEPLOYMENT"),
-        api_key=os.getenv("AZURE_CHAT_KEY"),
-        azure_endpoint=os.getenv("AZURE_CHAT_ENDPOINT"),
-        api_version=os.getenv("AZURE_API_VERSION"),
-        temperature=0.3,
-        max_tokens=500
-    )
+    try:
+        # Check for required environment variables
+        required_vars = [
+            "AZURE_OPENAI_API_KEY",
+            "AZURE_OPENAI_ENDPOINT",
+            "AZURE_OPENAI_API_VERSION",
+            "AZURE_OPENAI_CHAT_DEPLOYMENT"
+        ]
+        
+        missing_vars = [var for var in required_vars if not os.environ.get(var)]
+        
+        if missing_vars:
+            st.error(f"Missing required environment variables: {', '.join(missing_vars)}")
+            return None
+            
+        return AzureChatOpenAI(
+            azure_deployment=os.environ["AZURE_OPENAI_CHAT_DEPLOYMENT"],
+            api_key=os.environ["AZURE_OPENAI_API_KEY"],
+            azure_endpoint=os.environ["AZURE_OPENAI_ENDPOINT"],
+            api_version=os.environ["AZURE_OPENAI_API_VERSION"],
+            temperature=0.3,
+            max_tokens=500
+        )
+    except Exception as e:
+        st.error(f"Error initializing chat model: {str(e)}")
+        return None
 
 # System prompt for the chat model
 SYSTEM_PROMPT = """
@@ -217,6 +277,13 @@ def get_answer(query):
     # Initialize vector store and chat model
     qdrant_store = get_qdrant_store()
     chat_model = get_chat_model()
+    
+    # Check if vector store or chat model is available
+    if qdrant_store is None:
+        return "Unable to process your request at this time. The vector database is not available. Please try again later or contact support.", []
+        
+    if chat_model is None:
+        return "Unable to process your request at this time. The AI model is not available. Please try again later or contact support.", []
     
     # Create retriever with search parameters
     retriever = qdrant_store.as_retriever(
